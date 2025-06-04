@@ -1,3 +1,5 @@
+//#define ITERATE_BY_FACE
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -24,11 +26,6 @@ namespace Jomo.HalfEdgeMesh
             m_CurrentFace = -1;
             m_Timer = 0;
         }
-        
-        void OnGUI()
-        {
-            GUI.Label(new Rect(10, 10, 100, 20), "Hello World!");
-        }
     
         // Update is called once per frame
         void Update()
@@ -49,8 +46,8 @@ namespace Jomo.HalfEdgeMesh
     
                     m_Timer = 0;
                 }
-                
-                DisplayEdge(m_CurrentHalfEdge, Color.white);
+
+                DisplayEdge(m_CurrentHalfEdge, Color.orange);
                 
                 
     
@@ -62,12 +59,9 @@ namespace Jomo.HalfEdgeMesh
                     
                 }
             }
-            
-            
-            
+
+#if ITERATE_BY_FACE
             int iterationCount = 0;
-            
-            
             foreach (var greyFace in m_Mesh.Faces)
             {
                 iterationCount = 0;
@@ -87,9 +81,17 @@ namespace Jomo.HalfEdgeMesh
                     greycurrent = greycurrent.Previous;
                 } while (greystart != greycurrent);
             }
+#else
+            foreach (var halfEdge in m_Mesh.HalfEdges)
+            {
+                if(m_IterateHalfEdges && halfEdge == m_CurrentHalfEdge) continue;
+                
+                DisplayEdge(halfEdge, halfEdge.IncidentFace == null ? Color.red : Color.blue);
+            }
+#endif
         }
         
-        void DisplayEdge(HalfEdgeMesh.HalfEdge edge, Color color)
+        void DisplayEdge(HalfEdge edge, Color color)
         {
             Vector3 from = edge.Origin.Position;
             Vector3 to = edge.Twin.Origin.Position;

@@ -1,5 +1,5 @@
 {
-    "name": "Jomo.half-edge-mesh",
+    "name": "com.jomo.half-edge-mesh",
     "rootNamespace": "Jomo.HalfEdgeMesh",
     "references": [],
     "includePlatforms": [],
