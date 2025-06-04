@@ -1,5 +1,6 @@
 # com.jomo.half-edge-mesh
-A Half Edge Mesh library for Unity
+A [Half Edge Mesh library](https://jerryyin.info/geometry-processing-algorithms/half-edge/) for Unity (my faces are winding clockwise).
+
 
 If you do this:
 
