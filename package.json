@@ -1,0 +1,9 @@
+{
+  "name": "com.jomo.half-edge-mesh",
+  "version": "0.0.1",
+  "displayName": "Half Edge Mesh",
+  "author": {
+    "name": "Jonas Mortensen",
+    "email": "Jonasmortensen3@gmail.com"
+  }
+}
