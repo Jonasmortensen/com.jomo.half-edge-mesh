@@ -8,7 +8,4 @@ If you do this:
 
 It will create an [aperiodic ~~infinite~~ deterministic irregular relaxed quadrilateral grid](https://youtu.be/5xrRTOikBBg?si=GnCBaWe7SyWPD-DS&t=636):
 
-
-
-<img width="409" alt="image" src="https://github.com/user-attachments/assets/870df20c-28bd-4203-9220-027b4929095c" />
-
+<img width="447" alt="image" src="https://github.com/user-attachments/assets/0ca4a05e-88f3-4965-bd24-9345cf8d8e2b" />
