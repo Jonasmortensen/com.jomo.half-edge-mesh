@@ -636,41 +636,58 @@ namespace Jomo.HalfEdgeMesh
 
                     if (faceVertices.Count < 3) continue;
 
-                    var faceEdges = new List<HalfEdge>(faceVertices.Count);
-                    for (int j = 0; j < faceVertices.Count; j++)
-                    {
-                        Vertex a = faceVertices[j];
-                        Vertex b = faceVertices[(j + 1) % faceVertices.Count];
-
-                        if (directedEdges.TryGetValue((a.Index, b.Index), out HalfEdge e))
-                        {
-                            // Created earlier as the twin of a neighbouring face's edge
-                            if (!e.IsBoundary)
-                                throw new ArgumentException("Mesh is not manifold or has inconsistent winding at edge " + a.Index + "-" + b.Index);
-                        }
-                        else
-                        {
-                            var (ab, ba) = m.AddEdge(a, b);
-                            directedEdges.Add((a.Index, b.Index), ab);
-                            directedEdges.Add((b.Index, a.Index), ba);
-                            e = ab;
-                        }
-
-                        faceEdges.Add(e);
-                    }
-
-                    Face f = m.AddFace(faceEdges[0]);
-                    for (int j = 0; j < faceEdges.Count; j++)
-                    {
-                        faceEdges[j].IncidentFace = f;
-                        faceEdges[j].SetNext(faceEdges[(j + 1) % faceEdges.Count]);
-                    }
+                    m.AddPolygon(faceVertices, directedEdges);
                 }
             }
 
-            // Link the boundary: each boundary half-edge continues with the boundary half-edge leaving its end
+            m.LinkBoundary();
+            return m;
+        }
+
+        // Adds a face through the given vertices in winding order, reusing half-edges already created as
+        // twins of neighbouring faces. directedEdges maps (origin index, destination index) to half-edges
+        // and must be shared by all faces of the mesh. Call LinkBoundary once all faces are added.
+        private Face AddPolygon(List<Vertex> faceVertices, Dictionary<(int, int), HalfEdge> directedEdges)
+        {
+            var faceEdges = new List<HalfEdge>(faceVertices.Count);
+            for (int j = 0; j < faceVertices.Count; j++)
+            {
+                Vertex a = faceVertices[j];
+                Vertex b = faceVertices[(j + 1) % faceVertices.Count];
+
+                if (directedEdges.TryGetValue((a.Index, b.Index), out HalfEdge e))
+                {
+                    // Created earlier as the twin of a neighbouring face's edge
+                    if (!e.IsBoundary)
+                        throw new ArgumentException("Mesh is not manifold or has inconsistent winding at edge " + a.Index + "-" + b.Index);
+                }
+                else
+                {
+                    var (ab, ba) = AddEdge(a, b);
+                    directedEdges.Add((a.Index, b.Index), ab);
+                    directedEdges.Add((b.Index, a.Index), ba);
+                    e = ab;
+                }
+
+                faceEdges.Add(e);
+            }
+
+            Face f = AddFace(faceEdges[0]);
+            for (int j = 0; j < faceEdges.Count; j++)
+            {
+                faceEdges[j].IncidentFace = f;
+                faceEdges[j].SetNext(faceEdges[(j + 1) % faceEdges.Count]);
+            }
+
+            return f;
+        }
+
+        // Links the boundary: each boundary half-edge continues with the boundary half-edge leaving its end.
+        // Closed meshes have no boundary, so this does nothing for them.
+        private void LinkBoundary()
+        {
             var boundaryFrom = new Dictionary<Vertex, HalfEdge>();
-            foreach (var e in m.m_HalfEdges)
+            foreach (var e in m_HalfEdges)
             {
                 if (!e.IsBoundary) continue;
                 if (boundaryFrom.ContainsKey(e.Origin))
@@ -682,7 +699,47 @@ namespace Jomo.HalfEdgeMesh
             {
                 e.SetNext(boundaryFrom[e.Destination]);
             }
+        }
 
+        // A closed icosahedron centered on the origin, with all 12 vertices at the given radius.
+        // Faces are wound clockwise seen from outside, so their normals point outwards.
+        public static HalfEdgeMesh CreateIcosahedron(float radius)
+        {
+            HalfEdgeMesh m = new HalfEdgeMesh();
+
+            // Three orthogonal golden rectangles
+            float t = (1f + Mathf.Sqrt(5f)) / 2f;
+            Vector3[] corners =
+            {
+                new Vector3(-1, t, 0), new Vector3(1, t, 0), new Vector3(-1, -t, 0), new Vector3(1, -t, 0),
+                new Vector3(0, -1, t), new Vector3(0, 1, t), new Vector3(0, -1, -t), new Vector3(0, 1, -t),
+                new Vector3(t, 0, -1), new Vector3(t, 0, 1), new Vector3(-t, 0, -1), new Vector3(-t, 0, 1),
+            };
+
+            int[] triangles =
+            {
+                0, 11, 5,   0, 5, 1,    0, 1, 7,    0, 7, 10,   0, 10, 11,
+                1, 5, 9,    5, 11, 4,   11, 10, 2,  10, 7, 6,   7, 1, 8,
+                3, 9, 4,    3, 4, 2,    3, 2, 6,    3, 6, 8,    3, 8, 9,
+                4, 9, 5,    2, 4, 11,   6, 2, 10,   8, 6, 7,    9, 8, 1,
+            };
+
+            foreach (var corner in corners)
+            {
+                m.AddVertex(corner.normalized * radius);
+            }
+
+            var directedEdges = new Dictionary<(int, int), HalfEdge>();
+            for (int i = 0; i < triangles.Length; i += 3)
+            {
+                var faceVertices = new List<Vertex>
+                {
+                    m.m_Vertices[triangles[i]], m.m_Vertices[triangles[i + 1]], m.m_Vertices[triangles[i + 2]]
+                };
+                m.AddPolygon(faceVertices, directedEdges);
+            }
+
+            m.LinkBoundary();
             return m;
         }
 

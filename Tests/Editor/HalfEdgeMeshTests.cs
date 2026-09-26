@@ -14,7 +14,7 @@ namespace Jomo.HalfEdgeMesh.Tests
             Assert.IsEmpty(errors, string.Join("\n", errors));
         }
 
-        // V - E + F, which is 1 for any mesh shaped like a disk
+        // V - E + F, which is 1 for any mesh shaped like a disk and 2 for a closed sphere-like mesh
         static int EulerCharacteristic(HalfEdgeMesh mesh)
         {
             return mesh.Vertices.Count - mesh.HalfEdges.Count / 2 + mesh.Faces.Count;
@@ -58,6 +58,43 @@ namespace Jomo.HalfEdgeMesh.Tests
             Assert.AreEqual(sides + 1, mesh.Vertices.Count);
             Assert.AreEqual(sides, mesh.Faces.Count);
             Assert.AreEqual(1, EulerCharacteristic(mesh));
+        }
+
+        [Test]
+        public void CreateIcosahedron_IsClosedAndFacesOutwards()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(2);
+
+            AssertValid(mesh);
+            Assert.AreEqual(12, mesh.Vertices.Count);
+            Assert.AreEqual(30, mesh.HalfEdges.Count / 2);
+            Assert.AreEqual(20, mesh.Faces.Count);
+            Assert.AreEqual(2, EulerCharacteristic(mesh));
+            Assert.IsTrue(mesh.HalfEdges.All(e => !e.IsBoundary));
+
+            foreach (var v in mesh.Vertices)
+            {
+                Assert.AreEqual(2f, v.Position.magnitude, 1e-5f);
+                Assert.AreEqual(5, v.GetNeighbourVertices().Count);
+            }
+
+            foreach (var f in mesh.Faces)
+            {
+                Assert.AreEqual(3, f.GetSideCount());
+                Assert.Greater(Vector3.Dot(f.GetNormal(), f.GetCenter().normalized), 0.9f);
+            }
+        }
+
+        [Test]
+        public void CreateIcosahedron_CanBeSubdivided()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+
+            mesh.TriangleSubdivide();
+
+            AssertValid(mesh);
+            Assert.AreEqual(80, mesh.Faces.Count);
+            Assert.AreEqual(2, EulerCharacteristic(mesh));
         }
 
         [Test]
