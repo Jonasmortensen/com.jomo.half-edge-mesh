@@ -1,7 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
 namespace Jomo.HalfEdgeMesh
 {
     //TODO: These structures should probably just have indices rather than references
@@ -12,20 +8,19 @@ namespace Jomo.HalfEdgeMesh
         public Face IncidentFace;
         public int ID;
 
+        // Position in HalfEdgeMesh.HalfEdges, or -1 once removed from the mesh
+        internal int Index = -1;
+
         public HalfEdge(Vertex origin, int id)
         {
             Origin = origin;
             ID = id;
         }
-        
-        public void Validate()
-        {
-            if(Twin == null) Debug.Log("Edge " + ID + " is missing a twin");
-            if(Next == null) Debug.Log("Edge " + ID + " is missing Next");
-            if(Previous == null) Debug.Log("Edge " + ID + " is missing Previous");
-            if(Twin == this) Debug.Log("Edge " + ID + " has identical twin");
-            if(this != Twin.Twin) Debug.Log("Edge " + ID + " incorrect twin link");
-        }
+
+        public Vertex Destination => Twin.Origin;
+
+        // True when this half-edge lies on the outside of the mesh (it has no face)
+        public bool IsBoundary => IncidentFace == null;
 
         public void SetPrevious(HalfEdge e)
         {

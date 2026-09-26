@@ -1,116 +1,85 @@
-//#define ITERATE_BY_FACE
-
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Jomo.HalfEdgeMesh
 {
+    // Draws every half-edge as an arrow on the inside of its face (boundary edges in red) using gizmos.
+    // With m_IterateHalfEdges on, play mode steps through the edges of each face in turn.
     public class HalfEdgeMeshDebugView : MonoBehaviour
     {
-        public Mesh m_Mesh;
-    
+        public HalfEdgeMesh m_Mesh;
+
         public bool m_IterateHalfEdges;
-        
-        private int m_CurrentFace;
+
+        private int m_CurrentFace = -1;
         private HalfEdge m_CurrentHalfEdge;
         private HalfEdge m_StartHalfEdge;
         private float m_Timer;
-        
+
         [Range(0,0.2f)]
         public float DrawWidth = 0.04f;
-        
-        // Start is called before the first frame update
-        void Start()
-        {
-            m_CurrentFace = -1;
-            m_Timer = 0;
-        }
-    
-        // Update is called once per frame
+
         void Update()
         {
+            if (m_Mesh == null || !m_IterateHalfEdges || m_Mesh.Faces.Count == 0) return;
+
+            m_Timer += Time.deltaTime;
+
+            // Restart if the mesh changed under us and removed the edge we were on
+            bool edgeRemoved = m_CurrentHalfEdge == null || m_CurrentHalfEdge.Index < 0;
+
+            if (edgeRemoved || (m_StartHalfEdge == m_CurrentHalfEdge && m_Timer > 0.4f))
+            {
+                m_CurrentFace = (m_CurrentFace + 1) % m_Mesh.Faces.Count;
+
+                Face face = m_Mesh.Faces[m_CurrentFace];
+                m_StartHalfEdge = face.Edge;
+                m_CurrentHalfEdge = m_StartHalfEdge.Next;
+
+                m_Timer = 0;
+            }
+
+            if (m_Timer > 0.4f)
+            {
+                m_Timer = 0;
+                m_CurrentHalfEdge = m_CurrentHalfEdge.Next;
+            }
+        }
+
+        void OnDrawGizmos()
+        {
             if (m_Mesh == null) return;
-            
-            if (m_IterateHalfEdges)
-            {
-                m_Timer += Time.deltaTime;
-    
-                if (m_CurrentFace < 0 || (m_StartHalfEdge == m_CurrentHalfEdge && m_Timer > 0.4f))
-                {
-                    m_CurrentFace = (m_CurrentFace + 1) % m_Mesh.Faces.Count; 
-                    
-                    Face face = m_Mesh.Faces[m_CurrentFace];
-                    m_StartHalfEdge = face.Edge;
-                    m_CurrentHalfEdge = m_StartHalfEdge.Next;
-    
-                    m_Timer = 0;
-                }
 
-                DisplayEdge(m_CurrentHalfEdge, Color.orange);
-                
-                
-    
-                if (m_Timer > 0.4f)
-                {
-                    m_Timer = 0;
-                    m_CurrentHalfEdge = m_CurrentHalfEdge.Next;
-                    
-                    
-                }
-            }
+            Gizmos.matrix = transform.localToWorldMatrix;
 
-#if ITERATE_BY_FACE
-            int iterationCount = 0;
-            foreach (var greyFace in m_Mesh.Faces)
-            {
-                iterationCount = 0;
-                var greystart = greyFace.Edge;
-                var greycurrent = greyFace.Edge;
-                do
-                {
-                    if(!(m_IterateHalfEdges && greycurrent == m_CurrentHalfEdge)) DisplayEdge(greycurrent, Color.black);
-                    
-                    iterationCount++;
-                    if (iterationCount > 100)
-                    {
-                        Debug.Log("Infinite loop. Can't render");  break;
-                    }
-                    
-                    if(greycurrent.Previous == null) Debug.Log("This is an issue");
-                    greycurrent = greycurrent.Previous;
-                } while (greystart != greycurrent);
-            }
-#else
             foreach (var halfEdge in m_Mesh.HalfEdges)
             {
-                if(m_IterateHalfEdges && halfEdge == m_CurrentHalfEdge) continue;
-                
-                DisplayEdge(halfEdge, halfEdge.IncidentFace == null ? Color.red : Color.blue);
+                bool isCurrent = m_IterateHalfEdges && halfEdge == m_CurrentHalfEdge;
+                Color color = isCurrent ? new Color(1f, 0.5f, 0f) : halfEdge.IsBoundary ? Color.red : Color.blue;
+                DisplayEdge(halfEdge, color);
             }
-#endif
+
+            Gizmos.matrix = Matrix4x4.identity;
         }
-        
+
         void DisplayEdge(HalfEdge edge, Color color)
         {
             Vector3 from = edge.Origin.Position;
-            Vector3 to = edge.Twin.Origin.Position;
-    
+            Vector3 to = edge.Destination.Position;
+
+            // Boundary edges have no face, so use the face on the other side
+            Face face = edge.IncidentFace ?? edge.Twin.IncidentFace;
+            Vector3 normal = face != null ? face.GetNormal() : Vector3.up;
+
             Vector3 direction = (to - from).normalized;
-            Vector3 biTangent = Vector3.Cross(direction, Vector3.up);
-    
-            Vector3 offsetFrom = (from - biTangent * DrawWidth) + direction * DrawWidth*3; 
-            Vector3 offsetTo = (to - biTangent * DrawWidth) - direction*DrawWidth*3;
-    
-            offsetFrom = transform.TransformPoint(offsetFrom);
-            offsetTo = transform.TransformPoint(offsetTo);
-            direction = transform.TransformDirection(direction);
-            biTangent = transform.TransformDirection(biTangent);
-    
-            Vector3 offset = new Vector3(0, 0.01f, 0);
-            
-            Debug.DrawLine(offsetFrom + offset, offsetTo + offset, color);
-            Debug.DrawLine(offsetTo + offset, offsetTo + offset - biTangent*DrawWidth*3 - direction*DrawWidth*3, color);
+            Vector3 biTangent = Vector3.Cross(direction, normal);
+
+            Vector3 offset = normal * 0.01f;
+            Vector3 offsetFrom = (from - biTangent * DrawWidth) + direction * DrawWidth * 3 + offset;
+            Vector3 offsetTo = (to - biTangent * DrawWidth) - direction * DrawWidth * 3 + offset;
+
+            Gizmos.color = color;
+            Gizmos.DrawLine(offsetFrom, offsetTo);
+            Gizmos.DrawLine(offsetTo, offsetTo - biTangent * DrawWidth * 3 - direction * DrawWidth * 3);
         }
     }
 }

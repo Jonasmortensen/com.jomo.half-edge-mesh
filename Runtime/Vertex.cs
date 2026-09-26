@@ -1,7 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using JetBrains.Annotations;
 using UnityEngine;
 
 namespace Jomo.HalfEdgeMesh
@@ -10,125 +8,73 @@ namespace Jomo.HalfEdgeMesh
     {
         public Vector3 Position;
         public HalfEdge IncidentEdge;
-        public int id;
+        public int ID;
+
+        // Position in HalfEdgeMesh.Vertices
+        internal int Index = -1;
 
         public Vertex(Vector3 position)
         {
             Position = position;
         }
-        
-        public List<Vertex> GetNeighbourVertices()
-        {
-            List<Vertex> verts = new List<Vertex>();
 
-            HalfEdge startEdge = IncidentEdge;
-            HalfEdge currentEdge = startEdge;
+        // Every half-edge that starts at this vertex, including boundary half-edges
+        public IEnumerable<HalfEdge> OutgoingEdges() => Traversal.Fan(IncidentEdge);
 
-            do
-            {
-                verts.Add(currentEdge.Twin.Origin);
-                currentEdge = currentEdge.Previous.Twin;
-            } while (startEdge != currentEdge);
-            
-            return verts;
-        }
+        public List<Vertex> GetNeighbourVertices() => OutgoingEdges().Select(e => e.Destination).ToList();
 
         public HalfEdge GetIncomingOuterEdge()
         {
-            if (IncidentEdge == null) return null;
-            
-            HalfEdge startEdge = IncidentEdge;
-            HalfEdge currentEdge = startEdge;
-
-            do
+            foreach (var e in OutgoingEdges())
             {
-                if (currentEdge.Twin.IncidentFace == null) return currentEdge.Twin;
-
-                currentEdge = currentEdge.Twin.Next;
-            } while (startEdge != currentEdge);
+                if (e.Twin.IsBoundary) return e.Twin;
+            }
 
             return null;
         }
 
         public HalfEdge GetOutgoingOuterEdge()
         {
-            if (IncidentEdge == null) return null;
-            
-            HalfEdge startEdge = IncidentEdge;
-            HalfEdge currentEdge = startEdge;
-
-            do
+            foreach (var e in OutgoingEdges())
             {
-                if (currentEdge.IncidentFace == null) return currentEdge;
-
-                currentEdge = currentEdge.Previous.Twin;
-            } while (startEdge != currentEdge);
+                if (e.IsBoundary) return e;
+            }
 
             return null;
         }
 
         public List<Face> GetFaces()
         {
-            HashSet<Face> faces = new HashSet<Face>();
-
-            HalfEdge startEdge = IncidentEdge;
-            HalfEdge currentEdge = startEdge;
-
-            int loopSafety = 0;
-
-            do
-            {
-                if(loopSafety > 1000) Debug.Log("Loop safety GetFaces");
-                if(currentEdge.IncidentFace != null) faces.Add(currentEdge.IncidentFace);
-                currentEdge = currentEdge.Previous.Twin;
-            } while (startEdge != currentEdge);
-
-            return faces.ToList();
+            return OutgoingEdges().Where(e => !e.IsBoundary).Select(e => e.IncidentFace).ToList();
         }
 
         public bool IsOuter()
         {
-            HalfEdge startEdge = IncidentEdge;
-            HalfEdge currentEdge = startEdge;
-            
-            int loopSafety = 0;
-
-            do
-            {
-                if(loopSafety > 1000) Debug.Log("Loop safety IsOuter");
-                
-                if (currentEdge.IncidentFace == null || currentEdge.Twin.IncidentFace == null) return true;
-
-                loopSafety++;
-                currentEdge = currentEdge.Previous.Twin;
-            } while (startEdge != currentEdge);
-            
-            return false;
+            return OutgoingEdges().Any(e => e.IsBoundary || e.Twin.IsBoundary);
         }
 
+        // True when the vertex has exactly two neighbours and lies on the straight line between them
         public bool IsStraight()
         {
-            if (GetNeighbourVertices().Count != 2) return false;
-            
-            Vector3 v1 = IncidentEdge.Twin.Origin.Position;
-            Vector3 v2 = IncidentEdge.Previous.Origin.Position;
+            var neighbours = GetNeighbourVertices();
+            if (neighbours.Count != 2) return false;
 
-
-            Vector3 direction1 = (v1 - Position).normalized;
-            Vector3 direction2 = (v2 - Position).normalized;
+            Vector3 direction1 = (neighbours[0].Position - Position).normalized;
+            Vector3 direction2 = (neighbours[1].Position - Position).normalized;
 
             float dotProduct = Vector3.Dot(direction1, direction2);
-            
-            
+
             return Mathf.Abs(dotProduct + 1) < 0.001f;
         }
 
+        // Moves the vertex to the average of its surrounding face centers
         public void Relax()
         {
             List<Face> faces = GetFaces();
-            
+            if (faces.Count == 0) return;
+
             Vector3 averageFacePos = Vector3.zero;
-                
+
             foreach (var face in faces)
             {
                 averageFacePos += face.GetCenter();
