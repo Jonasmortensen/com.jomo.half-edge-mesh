@@ -695,6 +695,75 @@ namespace Jomo.HalfEdgeMesh
             return f;
         }
 
+        // A new mesh containing copies of the given faces of this mesh, which is left unchanged.
+        // Faces that only touch at a corner get separate copies of that vertex, since a half-edge mesh
+        // can't represent a vertex joining two otherwise unconnected fans.
+        public HalfEdgeMesh CopyFaces(IEnumerable<Face> faces)
+        {
+            var selected = new HashSet<Face>();
+            foreach (var face in faces)
+            {
+                if (face == null || face.Index < 0 || m_Faces[face.Index] != face)
+                    throw new ArgumentException("Face does not belong to this mesh");
+                selected.Add(face);
+            }
+
+            HalfEdgeMesh copy = new HalfEdgeMesh();
+            var corners = new Dictionary<(Vertex, Face), Vertex>();
+            var directedEdges = new Dictionary<(int, int), HalfEdge>();
+            var faceVertices = new List<Vertex>();
+
+            // Walk m_Faces rather than the set, so the copy's order doesn't depend on hashing
+            foreach (var face in m_Faces)
+            {
+                if (!selected.Contains(face)) continue;
+
+                faceVertices.Clear();
+                foreach (var v in face.Vertices())
+                {
+                    if (!corners.ContainsKey((v, face))) copy.AddVertexCopies(v, selected, corners);
+                    faceVertices.Add(corners[(v, face)]);
+                }
+
+                copy.AddPolygon(faceVertices, directedEdges);
+            }
+
+            copy.LinkBoundary();
+            return copy;
+        }
+
+        // Adds copies of v (a vertex of another mesh) to this mesh: one for each run of selected faces that are
+        // connected by edges around v. Records in corners which copy each selected face around v uses.
+        private void AddVertexCopies(Vertex v, HashSet<Face> selected, Dictionary<(Vertex, Face), Vertex> corners)
+        {
+            // Consecutive faces in the fan share an edge through v. Boundary gaps give null faces.
+            List<Face> fan = v.OutgoingEdges().Select(e => e.IncidentFace).ToList();
+
+            int start = fan.FindIndex(f => !selected.Contains(f));
+            if (start < 0)
+            {
+                // Every face around v is selected, so they all share one copy
+                Vertex shared = AddVertex(v.Position);
+                foreach (var f in fan) corners[(v, f)] = shared;
+                return;
+            }
+
+            // Starting right after an unselected face means no run wraps around the end of the list
+            Vertex current = null;
+            for (int i = 1; i <= fan.Count; i++)
+            {
+                Face f = fan[(start + i) % fan.Count];
+                if (!selected.Contains(f))
+                {
+                    current = null;
+                    continue;
+                }
+
+                if (current == null) current = AddVertex(v.Position);
+                corners[(v, f)] = current;
+            }
+        }
+
         // Links the boundary: each boundary half-edge continues with the boundary half-edge leaving its end.
         // Closed meshes have no boundary, so this does nothing for them.
         private void LinkBoundary()

@@ -117,6 +117,71 @@ namespace Jomo.HalfEdgeMesh.Tests
         }
 
         [Test]
+        public void CopyFaces_AdjacentFacesShareVertices()
+        {
+            // Consecutive hexagon triangles share a spoke
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+
+            var copy = mesh.CopyFaces(new[] { mesh.Faces[0], mesh.Faces[1] });
+
+            AssertValid(copy);
+            Assert.AreEqual(2, copy.Faces.Count);
+            Assert.AreEqual(4, copy.Vertices.Count);
+            AssertValid(mesh);
+            Assert.AreEqual(6, mesh.Faces.Count);
+        }
+
+        [Test]
+        public void CopyFaces_FacesTouchingAtCornerGetSeparateVertices()
+        {
+            // These two only share the center vertex
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+
+            var copy = mesh.CopyFaces(new[] { mesh.Faces[0], mesh.Faces[3] });
+
+            AssertValid(copy);
+            Assert.AreEqual(2, copy.Faces.Count);
+            Assert.AreEqual(6, copy.Vertices.Count);
+        }
+
+        [Test]
+        public void CopyFaces_SelectionAndRestTogetherCoverMesh()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+            mesh.TriangleSubdivide();
+            var selected = new HashSet<Face>(mesh.Faces.Where((f, i) => i % 3 == 0));
+
+            var part = mesh.CopyFaces(selected);
+            var rest = mesh.CopyFaces(mesh.Faces.Where(f => !selected.Contains(f)));
+
+            AssertValid(part);
+            AssertValid(rest);
+            Assert.AreEqual(mesh.Faces.Count, part.Faces.Count + rest.Faces.Count);
+        }
+
+        [Test]
+        public void CopyFaces_AllFaces_CopiesClosedMesh()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+
+            var copy = mesh.CopyFaces(mesh.Faces);
+
+            AssertValid(copy);
+            Assert.AreEqual(12, copy.Vertices.Count);
+            Assert.AreEqual(20, copy.Faces.Count);
+            Assert.AreEqual(2, EulerCharacteristic(copy));
+        }
+
+        [Test]
+        public void CopyFaces_FaceFromOtherMesh_Throws()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            var other = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+
+            Assert.Throws<ArgumentException>(() => mesh.CopyFaces(other.Faces));
+        }
+
+        [Test]
         public void VertexIdsAreUnique()
         {
             var mesh = CreateGrid(1);
