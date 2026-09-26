@@ -182,6 +182,127 @@ namespace Jomo.HalfEdgeMesh.Tests
         }
 
         [Test]
+        public void PokeFace_TurnsQuadIntoFourTrianglesAroundCenter()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 2, 2);
+
+            Vertex center = mesh.PokeFace(mesh.Faces[0]);
+
+            AssertValid(mesh);
+            Assert.AreEqual(Vector3.zero, center.Position);
+            Assert.AreEqual(5, mesh.Vertices.Count);
+            Assert.AreEqual(4, mesh.Faces.Count);
+            Assert.IsTrue(mesh.Faces.All(f => f.GetSideCount() == 3));
+            Assert.AreEqual(4, center.GetNeighbourVertices().Count);
+            Assert.IsTrue(mesh.Faces.All(f => Vector3.Dot(f.GetNormal(), Vector3.up) > 0.99f));
+        }
+
+        [Test]
+        public void PokeFace_LeavesNeighboursAlone()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            Face poked = mesh.Faces[0];
+            var neighbours = mesh.Faces.Where(f => f != poked).ToList();
+
+            mesh.PokeFace(poked);
+
+            AssertValid(mesh);
+            Assert.AreEqual(5 + 3, mesh.Faces.Count);
+            Assert.IsTrue(neighbours.All(f => f.GetSideCount() == 3));
+        }
+
+        [Test]
+        public void PokeFaces_MakesOneTrianglePerSide()
+        {
+            var mesh = CreateGrid(4);
+            int sideCount = mesh.Faces.Sum(f => f.GetSideCount());
+            int vertexCount = mesh.Vertices.Count + mesh.Faces.Count;
+
+            mesh.PokeFaces();
+
+            AssertValid(mesh);
+            Assert.AreEqual(sideCount, mesh.Faces.Count);
+            Assert.AreEqual(vertexCount, mesh.Vertices.Count);
+            Assert.IsTrue(mesh.Faces.All(f => f.GetSideCount() == 3));
+            Assert.AreEqual(1, EulerCharacteristic(mesh));
+        }
+
+        [Test]
+        public void PokeFaces_OnClosedMesh()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+
+            mesh.PokeFaces();
+
+            AssertValid(mesh);
+            Assert.AreEqual(60, mesh.Faces.Count);
+            Assert.AreEqual(2, EulerCharacteristic(mesh));
+        }
+
+        [Test]
+        public void Triangulate_SplitsEveryQuadInTwo()
+        {
+            var mesh = CreateGrid(3);
+            int quadCount = mesh.Faces.Count;
+
+            mesh.Triangulate();
+
+            AssertValid(mesh);
+            Assert.AreEqual(quadCount * 2, mesh.Faces.Count);
+            Assert.IsTrue(mesh.Faces.All(f => f.GetSideCount() == 3));
+            Assert.AreEqual(1, EulerCharacteristic(mesh));
+        }
+
+        [Test]
+        public void Triangulate_PicksDiagonalWithBiggestMinimumAngle()
+        {
+            // A flat rhombus. The short diagonal gives a smallest angle of about 37 degrees, the long one about 18.
+            var mesh = HalfEdgeMesh.CreateQuad(new Vector3(0, 0, 1), new Vector3(3, 0, 0), new Vector3(0, 0, -1), new Vector3(-3, 0, 0));
+            var v = mesh.Vertices;
+
+            mesh.Triangulate();
+
+            AssertValid(mesh);
+            Assert.IsNotNull(mesh.FindEdge(v[0], v[2]));
+            Assert.IsNull(mesh.FindEdge(v[1], v[3]));
+
+            // The same shape rotated so the short diagonal is the other one
+            mesh = HalfEdgeMesh.CreateQuad(new Vector3(-3, 0, 0), new Vector3(0, 0, 1), new Vector3(3, 0, 0), new Vector3(0, 0, -1));
+            v = mesh.Vertices;
+
+            mesh.Triangulate();
+
+            AssertValid(mesh);
+            Assert.IsNull(mesh.FindEdge(v[0], v[2]));
+            Assert.IsNotNull(mesh.FindEdge(v[1], v[3]));
+        }
+
+        [Test]
+        public void Triangulate_LeavesTrianglesAlone()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+
+            mesh.Triangulate();
+
+            AssertValid(mesh);
+            Assert.AreEqual(20, mesh.Faces.Count);
+        }
+
+        [Test]
+        public void Triangulate_FaceWithMoreThanFourSides_ThrowsWithoutChangingMesh()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            mesh.QuadSubdivide();
+            mesh.SplitEdge(mesh.Faces[0].Edge);
+            int faceCount = mesh.Faces.Count;
+
+            Assert.Throws<NotSupportedException>(() => mesh.Triangulate());
+
+            AssertValid(mesh);
+            Assert.AreEqual(faceCount, mesh.Faces.Count);
+        }
+
+        [Test]
         public void VertexIdsAreUnique()
         {
             var mesh = CreateGrid(1);

@@ -337,6 +337,106 @@ namespace Jomo.HalfEdgeMesh
             return (e1, e2);
         }
 
+        // Adds a vertex at the center of the face and connects it to every corner, turning an n-sided face into
+        // n triangles. The face's own edges are kept, so neighbouring faces are not affected. Returns the new vertex.
+        public Vertex PokeFace(Face face)
+        {
+            List<HalfEdge> sides = face.Edges().ToList();
+            int n = sides.Count;
+
+            Vertex center = AddVertex(face.GetCenter());
+
+            var toCorner = new HalfEdge[n];
+            var toCenter = new HalfEdge[n];
+            for (int i = 0; i < n; i++)
+            {
+                (toCorner[i], toCenter[i]) = AddEdge(center, sides[i].Origin);
+            }
+
+            // Triangle i: along side i, up its end corner's spoke to the center, down its start corner's spoke
+            for (int i = 0; i < n; i++)
+            {
+                HalfEdge side = sides[i];
+                HalfEdge up = toCenter[(i + 1) % n];
+                HalfEdge down = toCorner[i];
+
+                side.SetNext(up);
+                up.SetNext(down);
+                down.SetNext(side);
+
+                // The first triangle keeps the original face
+                Face triangle = face;
+                if (i == 0) face.Edge = side;
+                else triangle = AddFace(side);
+
+                side.IncidentFace = triangle;
+                up.IncidentFace = triangle;
+                down.IncidentFace = triangle;
+            }
+
+            return center;
+        }
+
+        // Pokes every face, see PokeFace. Quads become four triangles.
+        public void PokeFaces()
+        {
+            foreach (var face in m_Faces.ToList())
+            {
+                PokeFace(face);
+            }
+        }
+
+        // Splits every quad into two triangles. Triangles are left as they are; only quads are supported so far.
+        // Each quad is split along the diagonal whose triangles have the biggest minimum angle, and on a tie
+        // the smallest maximum angle.
+        public void Triangulate()
+        {
+            var quads = new List<Face>();
+            foreach (var face in m_Faces)
+            {
+                int sides = face.GetSideCount();
+                if (sides > 4)
+                    throw new NotSupportedException("Face " + face.ID + " has " + sides + " sides. Only triangles and quads can be triangulated.");
+                if (sides == 4) quads.Add(face);
+            }
+
+            foreach (var quad in quads)
+            {
+                HalfEdge e0 = quad.Edge;
+                HalfEdge e1 = e0.Next;
+                HalfEdge e2 = e1.Next;
+                HalfEdge e3 = e2.Next;
+
+                if (PrefersSecondDiagonal(e0.Origin.Position, e1.Origin.Position, e2.Origin.Position, e3.Origin.Position))
+                    SplitFace(e1, e3);
+                else
+                    SplitFace(e0, e2);
+            }
+        }
+
+        // For the quad a, b, c, d: whether the diagonal b-d gives better triangles than a-c
+        private static bool PrefersSecondDiagonal(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            var (minAC, maxAC) = AngleRange(a, b, c, d);
+            var (minBD, maxBD) = AngleRange(b, c, d, a);
+
+            const float tolerance = 1e-3f; // degrees
+            if (Mathf.Abs(minAC - minBD) > tolerance) return minBD > minAC;
+            return maxBD < maxAC - tolerance;
+        }
+
+        // Smallest and largest corner angle, in degrees, of the triangles a, b, c and a, c, d
+        private static (float, float) AngleRange(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            float[] angles =
+            {
+                Vector3.Angle(b - a, c - a), Vector3.Angle(a - b, c - b), Vector3.Angle(a - c, b - c),
+                Vector3.Angle(c - a, d - a), Vector3.Angle(a - c, d - c), Vector3.Angle(a - d, c - d),
+            };
+
+            return (angles.Min(), angles.Max());
+        }
+
         // For each face, the edges starting at a midpoint created by SplitAllEdges, in winding order
         private List<List<HalfEdge>> CollectMidpointEdges(HashSet<Vertex> midpoints)
         {
