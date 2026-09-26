@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Jomo.HalfEdgeMesh
@@ -7,73 +7,57 @@ namespace Jomo.HalfEdgeMesh
     public class Face
     {
         public HalfEdge Edge;
-        public int id;
+        public int ID;
+
+        // Position in HalfEdgeMesh.Faces, or -1 once removed from the mesh
+        internal int Index = -1;
 
         public Face(HalfEdge edge)
         {
             Edge = edge;
         }
-        
-        public int GetSideCount()
-        {
-            int count = 0;
-            var start = Edge;
-            var current = Edge;
-            
-            do
-            {
-                count++;
-                current = current.Next;
-                if (count > 1000) break;
-            } while (current != start);
 
-            return count;
-        }
+        // Half-edges around the face in winding (clockwise) order, starting at Edge
+        public IEnumerable<HalfEdge> Edges() => Traversal.Loop(Edge);
+
+        public IEnumerable<Vertex> Vertices() => Edges().Select(e => e.Origin);
+
+        public int GetSideCount() => Edges().Count();
 
         public Vector3 GetCenter()
         {
             Vector3 center = Vector3.zero;
-
-            HalfEdge start = Edge, current = Edge;
             int sideCount = 0;
-            
-            do
+
+            foreach (var e in Edges())
             {
-                center += current.Origin.Position;
+                center += e.Origin.Position;
                 sideCount++;
-                current = current.Next;
-            } while (current != start);
+            }
 
             return center / sideCount;
         }
 
-        public List<Vertex> GetVertices()
+        // Unit normal on the side the face is visible from (clockwise winding, like Unity)
+        public Vector3 GetNormal()
         {
-            List<Vertex> vertices = new List<Vertex>();
-
-            HalfEdge start = Edge, current = Edge;
-            do
+            // Newell's method, which also handles non-planar polygons
+            Vector3 normal = Vector3.zero;
+            foreach (var e in Edges())
             {
-                vertices.Add(current.Origin);
-                current = current.Next;
-            } while (start != current);
+                Vector3 a = e.Origin.Position;
+                Vector3 b = e.Destination.Position;
+                normal.x += (a.y - b.y) * (a.z + b.z);
+                normal.y += (a.z - b.z) * (a.x + b.x);
+                normal.z += (a.x - b.x) * (a.y + b.y);
+            }
 
-            return vertices;
+            return normal.normalized;
         }
 
-        public List<Face> GetNeighbours()
-        {
-            List<Face> neighbours = new List<Face>();
-            
-            HalfEdge start = Edge, current = Edge;
-            do
-            {
-                neighbours.Add(current.Twin.IncidentFace);
-                current = current.Next;
-            } while (start != current);
+        public List<Vertex> GetVertices() => Vertices().ToList();
 
-            return neighbours;
-        }
+        // One entry per side. Sides on the mesh boundary have no neighbour and give null.
+        public List<Face> GetNeighbours() => Edges().Select(e => e.Twin.IncidentFace).ToList();
     }
 }
-

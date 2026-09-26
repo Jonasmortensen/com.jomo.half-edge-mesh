@@ -1,7 +1,14 @@
 {
   "name": "com.jomo.half-edge-mesh",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "displayName": "Half Edge Mesh",
+  "description": "A half-edge mesh data structure for Unity, with subdivision, relaxation and irregular quad grid generation.",
+  "unity": "6000.0",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jonasmortensen/com.jomo.half-edge-mesh.git"
+  },
   "author": {
     "name": "Jonas Mortensen",
     "email": "Jonasmortensen3@gmail.com"
