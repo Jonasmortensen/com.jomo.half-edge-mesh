@@ -98,6 +98,25 @@ namespace Jomo.HalfEdgeMesh.Tests
         }
 
         [Test]
+        public void SphereProject_PutsVerticesOnSphereAroundOrigin()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+            mesh.TriangleSubdivide();
+            var origin = new Vector3(1, 2, 3);
+            var directions = mesh.Vertices.ToDictionary(v => v, v => (v.Position - origin).normalized);
+
+            mesh.SphereProject(4, origin);
+
+            AssertValid(mesh);
+            foreach (var v in mesh.Vertices)
+            {
+                Vector3 offset = v.Position - origin;
+                Assert.AreEqual(4f, offset.magnitude, 1e-4f);
+                Assert.Greater(Vector3.Dot(offset.normalized, directions[v]), 0.9999f, "Vertex " + v.ID + " changed direction");
+            }
+        }
+
+        [Test]
         public void VertexIdsAreUnique()
         {
             var mesh = CreateGrid(1);

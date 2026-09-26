@@ -287,6 +287,19 @@ namespace Jomo.HalfEdgeMesh
             }
         }
 
+        // Moves every vertex along the line from origin through it, so it lies on the sphere with the given
+        // radius around origin. A vertex exactly at origin has no direction and is left where it is.
+        public void SphereProject(float radius, Vector3 origin)
+        {
+            foreach (var v in m_Vertices)
+            {
+                Vector3 offset = v.Position - origin;
+                if (offset == Vector3.zero) continue;
+
+                v.Position = origin + offset.normalized * radius;
+            }
+        }
+
         // Connects aOut.Origin and bOut.Origin with a new edge, splitting their common face in two.
         // Returns (edge from b to a, edge from a to b). The first one is in the new face.
         public (HalfEdge, HalfEdge) SplitFace(HalfEdge aOut, HalfEdge bOut)
