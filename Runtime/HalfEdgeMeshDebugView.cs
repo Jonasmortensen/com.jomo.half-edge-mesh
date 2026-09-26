@@ -2,7 +2,8 @@ using UnityEngine;
 
 namespace Jomo.HalfEdgeMesh
 {
-    // Draws every half-edge as an arrow on the inside of its face (boundary edges in red) using gizmos.
+    // Draws every half-edge as an arrow on the inside of its face (boundary edges in red) using gizmos,
+    // optionally skipping faces that point away from the camera.
     // With m_IterateHalfEdges on, play mode steps through the edges of each face in turn.
     public class HalfEdgeMeshDebugView : MonoBehaviour
     {
@@ -14,6 +15,9 @@ namespace Jomo.HalfEdgeMesh
         private HalfEdge m_CurrentHalfEdge;
         private HalfEdge m_StartHalfEdge;
         private float m_Timer;
+
+        // Skip faces pointing away from the camera, so closed meshes don't draw their far side
+        public bool m_BackfaceCulling = true;
 
         [Range(0,0.2f)]
         public float DrawWidth = 0.04f;
@@ -51,24 +55,46 @@ namespace Jomo.HalfEdgeMesh
 
             Gizmos.matrix = transform.localToWorldMatrix;
 
-            foreach (var halfEdge in m_Mesh.HalfEdges)
+            // Camera.current is the camera being drawn, usually the Scene view camera
+            Camera cam = m_BackfaceCulling ? Camera.current : null;
+
+            foreach (var face in m_Mesh.Faces)
             {
-                bool isCurrent = m_IterateHalfEdges && halfEdge == m_CurrentHalfEdge;
-                Color color = isCurrent ? new Color(1f, 0.5f, 0f) : halfEdge.IsBoundary ? Color.red : Color.blue;
-                DisplayEdge(halfEdge, color);
+                Vector3 normal = face.GetNormal();
+                if (cam != null && !IsFacingCamera(face, normal, cam)) continue;
+
+                foreach (var halfEdge in face.Edges())
+                {
+                    DisplayEdge(halfEdge, normal, EdgeColor(halfEdge));
+
+                    // Boundary edges have no face, so they are drawn and culled with the face on the other side
+                    if (halfEdge.Twin.IsBoundary) DisplayEdge(halfEdge.Twin, normal, EdgeColor(halfEdge.Twin));
+                }
             }
 
             Gizmos.matrix = Matrix4x4.identity;
         }
 
-        void DisplayEdge(HalfEdge edge, Color color)
+        Color EdgeColor(HalfEdge halfEdge)
+        {
+            if (m_IterateHalfEdges && halfEdge == m_CurrentHalfEdge) return new Color(1f, 0.5f, 0f);
+            return halfEdge.IsBoundary ? Color.red : Color.blue;
+        }
+
+        bool IsFacingCamera(Face face, Vector3 normal, Camera cam)
+        {
+            // Compare in the mesh's local space, where the vertex positions and normals live
+            Vector3 toCamera = cam.orthographic
+                ? transform.InverseTransformDirection(-cam.transform.forward)
+                : transform.InverseTransformPoint(cam.transform.position) - face.GetCenter();
+
+            return Vector3.Dot(normal, toCamera) > 0;
+        }
+
+        void DisplayEdge(HalfEdge edge, Vector3 normal, Color color)
         {
             Vector3 from = edge.Origin.Position;
             Vector3 to = edge.Destination.Position;
-
-            // Boundary edges have no face, so use the face on the other side
-            Face face = edge.IncidentFace ?? edge.Twin.IncidentFace;
-            Vector3 normal = face != null ? face.GetNormal() : Vector3.up;
 
             Vector3 direction = (to - from).normalized;
             Vector3 biTangent = Vector3.Cross(direction, normal);
