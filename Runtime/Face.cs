@@ -9,6 +9,9 @@ namespace Jomo.HalfEdgeMesh
         public HalfEdge Edge;
         public int ID;
 
+        // Optional user data. Mesh operations pass it on to faces derived from this one, see IMeshData.
+        public IMeshData Data;
+
         // Position in HalfEdgeMesh.Faces, or -1 once removed from the mesh
         internal int Index = -1;
 
@@ -16,6 +19,9 @@ namespace Jomo.HalfEdgeMesh
         {
             Edge = edge;
         }
+
+        // Data as T, or null if there is no data or it is of another type
+        public T GetData<T>() where T : class, IMeshData => Data as T;
 
         // Half-edges around the face in winding (clockwise) order, starting at Edge
         public IEnumerable<HalfEdge> Edges() => Traversal.Loop(Edge);

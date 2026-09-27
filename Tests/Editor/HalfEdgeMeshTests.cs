@@ -302,6 +302,144 @@ namespace Jomo.HalfEdgeMesh.Tests
             Assert.AreEqual(faceCount, mesh.Faces.Count);
         }
 
+        class TestData : IMeshData
+        {
+            public int Value;
+            public IMeshData Clone() => new TestData { Value = Value };
+        }
+
+        class OtherData : IMeshData
+        {
+            public IMeshData Clone() => this;
+        }
+
+        // Gives every face data holding its index, so faces derived from it can be traced back
+        static void TagFaces(HalfEdgeMesh mesh)
+        {
+            for (int i = 0; i < mesh.Faces.Count; i++) mesh.Faces[i].Data = new TestData { Value = i };
+        }
+
+        // Asserts every face has TestData of its own and that each original value occurs expectedPerValue times
+        static void AssertDataCarried(HalfEdgeMesh mesh, int originalFaceCount, int expectedPerValue)
+        {
+            var data = mesh.Faces.Select(f => f.GetData<TestData>()).ToList();
+            Assert.IsTrue(data.All(d => d != null), "Some faces lost their data");
+            Assert.AreEqual(data.Count, data.Distinct().Count(), "Some faces share a data instance");
+
+            var counts = data.GroupBy(d => d.Value).ToDictionary(g => g.Key, g => g.Count());
+            Assert.AreEqual(originalFaceCount, counts.Count);
+            Assert.IsTrue(counts.Values.All(c => c == expectedPerValue));
+        }
+
+        [Test]
+        public void FaceData_IsNullByDefaultAndStaysNull()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+
+            mesh.PokeFaces();
+            var copy = mesh.CopyFaces(mesh.Faces);
+
+            Assert.IsTrue(mesh.Faces.All(f => f.Data == null));
+            Assert.IsTrue(copy.Faces.All(f => f.Data == null));
+        }
+
+        [Test]
+        public void GetData_ReturnsNullForOtherType()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            mesh.Faces[0].Data = new OtherData();
+
+            Assert.IsNull(mesh.Faces[0].GetData<TestData>());
+            Assert.IsNotNull(mesh.Faces[0].GetData<OtherData>());
+        }
+
+        [Test]
+        public void FaceData_CarriedBySplitFace()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            TagFaces(mesh);
+            HalfEdge e = mesh.Faces[0].Edge;
+
+            mesh.SplitFace(e, e.Next.Next);
+
+            AssertDataCarried(mesh, 1, 2);
+        }
+
+        [Test]
+        public void FaceData_CarriedByPokeFaces()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            mesh.QuadSubdivide();
+            TagFaces(mesh);
+
+            mesh.PokeFaces();
+
+            AssertDataCarried(mesh, 18, 4);
+        }
+
+        [Test]
+        public void FaceData_CarriedByTriangulate()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            mesh.QuadSubdivide();
+            TagFaces(mesh);
+
+            mesh.Triangulate();
+
+            AssertDataCarried(mesh, 18, 2);
+        }
+
+        [Test]
+        public void FaceData_CarriedByTriangleSubdivide()
+        {
+            var mesh = HalfEdgeMesh.CreateIcosahedron(1);
+            TagFaces(mesh);
+
+            mesh.TriangleSubdivide();
+
+            AssertDataCarried(mesh, 20, 4);
+        }
+
+        [Test]
+        public void FaceData_CarriedByQuadSubdivide()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            TagFaces(mesh);
+
+            mesh.QuadSubdivide();
+
+            AssertDataCarried(mesh, 6, 3);
+        }
+
+        [Test]
+        public void FaceData_ClonedByCopyFaces()
+        {
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            TagFaces(mesh);
+            var originals = mesh.Faces.Select(f => f.Data).ToList();
+
+            var copy = mesh.CopyFaces(mesh.Faces.Take(3));
+
+            AssertDataCarried(copy, 3, 1);
+            Assert.IsTrue(copy.Faces.All(f => !originals.Contains(f.Data)), "The copy shares data with the original");
+            CollectionAssert.AreEqual(originals, mesh.Faces.Select(f => f.Data).ToList());
+        }
+
+        [Test]
+        public void FaceData_DissolveEdgeKeepsDataOfReturnedFace()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            HalfEdge e = mesh.Faces[0].Edge;
+            var (split, _) = mesh.SplitFace(e, e.Next.Next);
+            var kept = new TestData { Value = 1 };
+            split.IncidentFace.Data = kept;
+            split.Twin.IncidentFace.Data = new TestData { Value = 2 };
+
+            Face merged = mesh.DissolveEdge(split);
+
+            Assert.AreSame(kept, merged.Data);
+        }
+
         [Test]
         public void VertexIdsAreUnique()
         {

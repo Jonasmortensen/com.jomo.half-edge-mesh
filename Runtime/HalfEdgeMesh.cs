@@ -35,9 +35,11 @@ namespace Jomo.HalfEdgeMesh
             return e;
         }
 
-        private Face AddFace(HalfEdge incidentEdge)
+        // source is the face the new one is derived from, if any. The new face gets a clone of its data.
+        private Face AddFace(HalfEdge incidentEdge, Face source = null)
         {
             Face f = new Face(incidentEdge);
+            f.Data = source?.Data?.Clone();
             f.ID = FaceId++;
             f.Index = m_Faces.Count;
             m_Faces.Add(f);
@@ -94,7 +96,8 @@ namespace Jomo.HalfEdgeMesh
             return null;
         }
 
-        // Removes the edge and merges its two faces into e.IncidentFace, which is returned
+        // Removes the edge and merges its two faces into e.IncidentFace, which is returned.
+        // The returned face keeps its Data; the data of the face on the other side is dropped.
         public Face DissolveEdge(HalfEdge e)
         {
             if (e.IsBoundary || e.Twin.IsBoundary)
@@ -320,7 +323,7 @@ namespace Jomo.HalfEdgeMesh
 
             var (e1, e2) = AddEdge(b, a);
 
-            Face newFace = AddFace(e1);
+            Face newFace = AddFace(e1, commonFace);
             commonFace.Edge = e2;
             e2.IncidentFace = commonFace;
 
@@ -367,7 +370,7 @@ namespace Jomo.HalfEdgeMesh
                 // The first triangle keeps the original face
                 Face triangle = face;
                 if (i == 0) face.Edge = side;
-                else triangle = AddFace(side);
+                else triangle = AddFace(side, face);
 
                 side.IncidentFace = triangle;
                 up.IncidentFace = triangle;
@@ -483,7 +486,7 @@ namespace Jomo.HalfEdgeMesh
                 var (e3, e4) = AddEdge(thirdVert, centerVert);
 
                 //Set face incidence
-                Face newFace = AddFace(e1);
+                Face newFace = AddFace(e1, face);
                 e3.IncidentFace = newFace;
                 e2.IncidentFace = face;
                 face.Edge = e4;
@@ -525,7 +528,7 @@ namespace Jomo.HalfEdgeMesh
                     Vertex firstVert = edgesToRedirect[(j + 1) % newFaces[i].Count].Origin;
                     Vertex secondVert = currentEdge.Origin;
                     var (e1, e2) = AddEdge(firstVert, secondVert);
-                    Face newFace = AddFace(e1);
+                    Face newFace = AddFace(e1, currentEdge.IncidentFace);
                     e2.IncidentFace = currentEdge.IncidentFace;
 
                     currentEdge.IncidentFace.Edge = e2;
@@ -825,7 +828,8 @@ namespace Jomo.HalfEdgeMesh
                     faceVertices.Add(corners[(v, face)]);
                 }
 
-                copy.AddPolygon(faceVertices, directedEdges);
+                Face faceCopy = copy.AddPolygon(faceVertices, directedEdges);
+                faceCopy.Data = face.Data?.Clone();
             }
 
             copy.LinkBoundary();
