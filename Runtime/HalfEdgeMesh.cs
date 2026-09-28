@@ -96,8 +96,8 @@ namespace Jomo.HalfEdgeMesh
             return null;
         }
 
-        // Removes the edge and merges its two faces into e.IncidentFace, which is returned.
-        // The returned face keeps its Data; the data of the face on the other side is dropped.
+        // Removes the edge and merges its two faces into e.IncidentFace, which is returned. Its Data becomes its own
+        // data merged with the other face's (see IMeshData.Merge), or the other face's if it had none.
         public Face DissolveEdge(HalfEdge e)
         {
             if (e.IsBoundary || e.Twin.IsBoundary)
@@ -109,6 +109,8 @@ namespace Jomo.HalfEdgeMesh
             Face newFace = e.IncidentFace;
             newFace.Edge = e.Next;
             Face oldFace = e.Twin.IncidentFace;
+
+            if (oldFace.Data != null) newFace.Data = newFace.Data != null ? newFace.Data.Merge(oldFace.Data) : oldFace.Data;
 
             //redirect links to e and e.twin
             e.Previous.SetNext(e.Twin.Next);

@@ -440,6 +440,42 @@ namespace Jomo.HalfEdgeMesh.Tests
             Assert.AreSame(kept, merged.Data);
         }
 
+        class SummingData : IMeshData
+        {
+            public int Value;
+            public IMeshData Clone() => new SummingData { Value = Value };
+            public IMeshData Merge(IMeshData other) => new SummingData { Value = Value + ((SummingData)other).Value };
+        }
+
+        [Test]
+        public void FaceData_DissolveEdgeMergesData()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            HalfEdge e = mesh.Faces[0].Edge;
+            var (split, _) = mesh.SplitFace(e, e.Next.Next);
+            split.IncidentFace.Data = new SummingData { Value = 1 };
+            split.Twin.IncidentFace.Data = new SummingData { Value = 2 };
+
+            Face merged = mesh.DissolveEdge(split);
+
+            Assert.AreEqual(3, merged.GetData<SummingData>().Value);
+        }
+
+        [Test]
+        public void FaceData_DissolveEdgeTakesOtherDataWhenKeptFaceHasNone()
+        {
+            var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
+            HalfEdge e = mesh.Faces[0].Edge;
+            var (split, _) = mesh.SplitFace(e, e.Next.Next);
+            var other = new TestData { Value = 2 };
+            split.IncidentFace.Data = null;
+            split.Twin.IncidentFace.Data = other;
+
+            Face merged = mesh.DissolveEdge(split);
+
+            Assert.AreSame(other, merged.Data);
+        }
+
         [Test]
         public void VertexIdsAreUnique()
         {
