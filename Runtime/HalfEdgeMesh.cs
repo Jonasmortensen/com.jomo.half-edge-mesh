@@ -805,6 +805,14 @@ namespace Jomo.HalfEdgeMesh
         // can't represent a vertex joining two otherwise unconnected fans.
         public HalfEdgeMesh CopyFaces(IEnumerable<Face> faces)
         {
+            return CopyFaces(faces, out _);
+        }
+
+        // CopyFaces that also gives, for every vertex of the copy, the vertex of this mesh it copies. Several copies can
+        // share an original, where faces only touch at a corner. Later operations on the copy keep its vertices, so the
+        // map still tells which of its vertices came from this mesh after it has been subdivided.
+        public HalfEdgeMesh CopyFaces(IEnumerable<Face> faces, out Dictionary<Vertex, Vertex> originals)
+        {
             var selected = new HashSet<Face>();
             foreach (var face in faces)
             {
@@ -835,6 +843,10 @@ namespace Jomo.HalfEdgeMesh
             }
 
             copy.LinkBoundary();
+
+            originals = new Dictionary<Vertex, Vertex>();
+            foreach (var pair in corners) originals[pair.Value] = pair.Key.Item1;
+
             return copy;
         }
 

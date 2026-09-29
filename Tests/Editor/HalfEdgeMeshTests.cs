@@ -173,6 +173,24 @@ namespace Jomo.HalfEdgeMesh.Tests
         }
 
         [Test]
+        public void CopyFaces_OriginalsMapEveryCopiedVertex()
+        {
+            // Faces 0 and 3 of the hexagon only share the center, which is copied twice
+            var mesh = HalfEdgeMesh.CreatePolygon(6, 1);
+            var faces = new[] { mesh.Faces[0], mesh.Faces[3] };
+
+            var copy = mesh.CopyFaces(faces, out var originals);
+
+            Assert.AreEqual(copy.Vertices.Count, originals.Count);
+            foreach (var v in copy.Vertices)
+            {
+                Assert.IsTrue(mesh.Vertices.Contains(originals[v]));
+                Assert.AreEqual(originals[v].Position, v.Position);
+            }
+            Assert.AreEqual(2, copy.Vertices.Count(v => originals[v] == mesh.Vertices[0]));
+        }
+
+        [Test]
         public void CopyFaces_FaceFromOtherMesh_Throws()
         {
             var mesh = HalfEdgeMesh.CreateQuad(Vector3.zero, 1, 1);
