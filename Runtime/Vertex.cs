@@ -12,6 +12,7 @@ namespace Jomo.HalfEdgeMesh
 
         // Position in HalfEdgeMesh.Vertices
         internal int Index = -1;
+        
 
         public Vertex(Vector3 position)
         {
